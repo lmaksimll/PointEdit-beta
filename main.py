@@ -1,7 +1,8 @@
 import tkinter as tk
 from tkinter import filedialog
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.backends.backend_tkagg import (
+    FigureCanvasTkAgg, NavigationToolbar2Tk)
 from matplotlib.patches import Rectangle
 import csv
 
@@ -9,11 +10,24 @@ class PointPlotterApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Point Edit")
+        self.root.geometry("850x700")
 
-        self.figure, self.ax = plt.subplots()
-        self.rect = Rectangle((0, 0), 1, 1, facecolor='None', edgecolor='green')
-        self.canvas = FigureCanvasTkAgg(self.figure, master=self.root)
-        self.canvas.get_tk_widget().grid(row=0, column=0, columnspan=3)
+        self.frame_top = tk.Frame(root)
+        self.frame_top.pack(fill='both', expand=True)
+        self.figure, self.ax = plt.subplots(dpi=100)
+
+        self.rect = Rectangle((0, 0), 1, 1, facecolor='None', edgecolor='black')
+
+        self.canvas = FigureCanvasTkAgg(self.figure, master=self.frame_top)
+        self.canvas.draw()
+        self.canvas.get_tk_widget().pack(fill='both', expand=True)
+
+        self.toolbar = NavigationToolbar2Tk(self.canvas, self.frame_top)
+        self.toolbar.update()
+
+        self.button_state = False
+        self.tool = tk.Button(self.toolbar, text="Edit point",command=self.button_pressed)
+        self.tool.pack(side='left')
 
         self.points = []
         self.del_points = []
@@ -26,30 +40,46 @@ class PointPlotterApp:
         self.canvas.mpl_connect('button_press_event', self.on_press)
         self.canvas.mpl_connect('button_release_event', self.on_release)
 
-        self.import_button = tk.Button(self.root, text="Import csv file", command=self.import_points, height=2)
-        self.import_button.grid(row=1, column=0, padx=15, pady=15)
+        self.frame_bottom = tk.Frame(root)
+        self.frame_bottom.pack(fill='x')
 
-        self.export_button = tk.Button(self.root, text="Export csv file", command=self.export_points, height=2)
-        self.export_button.grid(row=1, column=1, padx=15, pady=15)
+        self.import_button = tk.Button(self.frame_bottom, text="Import csv file", command=self.import_points, height=2)
+        self.import_button.pack(side='left', fill='x', expand=True)
 
-        self.delete_button = tk.Button(self.root, text="Apply changes", command=self.delete_points, height=2)
-        self.delete_button.grid(row=1, column=2, padx=15, pady=15)
+        self.export_button = tk.Button(self.frame_bottom, text="Export csv file", command=self.export_points, height=2)
+        self.export_button.pack(side='left', fill='x', expand=True)
+
+        self.delete_button = tk.Button(self.frame_bottom, text="Apply changes", command=self.delete_points, height=2)
+        self.delete_button.pack(side='left', fill='x', expand=True)
+
+    def button_pressed(self):
+        if self.button_state == False:
+            self.tool.config(relief="sunken")
+            self.button_state = True
+        else:
+            self.tool.config(relief="raised")
+            self.button_state = False
+            self.canvas.draw()
 
     def on_press(self, event):
-        self.rec_x0 = event.xdata
-        self.rec_y0 = event.ydata
+        if self.button_state == True:
+            self.rec_x0 = event.xdata
+            self.rec_y0 = event.ydata
 
     def on_release(self, event):
-        self.rec_x1 = event.xdata
-        self.rec_y1 = event.ydata
-        self.rect.set_width(self.rec_x1 - self.rec_x0)
-        self.rect.set_height(self.rec_y1 - self.rec_y0)
-        self.rect.set_xy((self.rec_x0, self.rec_y0))
-        self.ax.add_patch(self.rect)
-        self.canvas.draw()
+        if self.button_state == True:
+            self.rec_x1 = event.xdata
+            self.rec_y1 = event.ydata
+            self.rect.set_width(self.rec_x1 - self.rec_x0)
+            self.rect.set_height(self.rec_y1 - self.rec_y0)
+            self.rect.set_xy((self.rec_x0, self.rec_y0))
+            self.ax.add_patch(self.rect)
+            self.canvas.draw()
 
-        if len(self.points) > 0:
-            self.selection_points()
+            if len(self.points) > 0:
+                self.selection_points()
+
+            self.rect.remove()
 
     def on_click(self, event):
         if len(self.del_points) == 0:
@@ -138,12 +168,12 @@ class PointPlotterApp:
         for point in self.points:
             if self.rec_x1 > self.rec_x0:
                 if point[0] >= self.rec_x0 and point[0] <= self.rec_x1 and point[1] <= self.rec_y0 and point[1] >= self.rec_y1:
-                    self.ax.plot(point[0], point[1], 'gx')
+                    self.ax.plot(point[0], point[1], 'kx')
                     self.del_points.append(point)
                     self.canvas.draw()
             else:
                 if point[0] <= self.rec_x0 and point[0] >= self.rec_x1 and point[1] >= self.rec_y0 and point[1] <= self.rec_y1:
-                    self.ax.plot(point[0], point[1], 'gx')
+                    self.ax.plot(point[0], point[1], 'kx')
                     self.del_points.append(point)
                     self.canvas.draw()
 
