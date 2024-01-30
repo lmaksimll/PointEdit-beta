@@ -1,16 +1,17 @@
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import (filedialog, messagebox, ttk)
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import (
     FigureCanvasTkAgg, NavigationToolbar2Tk)
-from matplotlib.patches import Rectangle
+from matplotlib.patches import Rectangle, Ellipse
 import csv
 
 class PointPlotterApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Point Edit")
-        self.root.geometry("850x700")
+        self.root.attributes('-fullscreen', True)
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         self.frame_top = tk.Frame(root)
         self.frame_top.pack(fill='both', expand=True)
@@ -22,44 +23,91 @@ class PointPlotterApp:
         self.canvas.draw()
         self.canvas.get_tk_widget().pack(fill='both', expand=True)
 
-        self.toolbar = NavigationToolbar2Tk(self.canvas, self.frame_top)
-        self.toolbar.update()
-
-        self.button_state = False
-        self.tool = tk.Button(self.toolbar, text="Edit point",command=self.button_pressed)
-        self.tool.pack(side='left')
-
+        # -------------------variables-------------------
         self.points = []
         self.del_points = []
         self.rec_x0 = None
         self.rec_y0 = None
         self.rec_x1 = None
         self.rec_y1 = None
+        self.button_state = False
 
-        self.canvas.mpl_connect('button_press_event', self.on_click)
+        # -------------------buttons-------------------
+        self.toolbar = NavigationToolbar2Tk(self.canvas, self.frame_top)
+        self.toolbar.update()
+
+        self.edit_button = tk.Button(self.toolbar, text="Edit point",command=self.button_pressed)
+        self.edit_button.pack(side='left', padx=5)
+
+        self.open_button = tk.Button(self.toolbar, text="Open file", command=self.open_points)
+        self.open_button.pack(side='left', padx=5)
+
+        self.save_button = tk.Button(self.toolbar, text="Save file", command=self.save_points)
+        self.save_button.pack(side='left', padx=5)
+
+        self.delete_button = tk.Button(self.toolbar, text="Apply changes", command=self.delete_points)
+        self.delete_button.pack(side='left', padx=5)
+
+        # -------------------bind-------------------
+        self.root.bind('<Escape>', self.on_closing)
+        self.root.bind('<i>', self.button_pressed)
+
+        self.edit_button.bind("<Enter>", lambda event: self.on_enter(event, 'edit'))
+        self.edit_button.bind("<Leave>", lambda event: self.on_leave(event, 'edit'))
+
+        self.open_button.bind("<Enter>", lambda event: self.on_enter(event, 'open'))
+        self.open_button.bind("<Leave>", lambda event: self.on_leave(event, 'open'))
+
+        self.save_button.bind("<Enter>", lambda event: self.on_enter(event, 'save'))
+        self.save_button.bind("<Leave>", lambda event: self.on_leave(event, 'save'))
+
+        self.delete_button.bind("<Enter>", lambda event: self.on_enter(event, 'delete'))
+        self.delete_button.bind("<Leave>", lambda event: self.on_leave(event, 'delete'))
+
+        # -------------------connect-------------------
         self.canvas.mpl_connect('button_press_event', self.on_press)
         self.canvas.mpl_connect('button_release_event', self.on_release)
 
-        self.frame_bottom = tk.Frame(root)
-        self.frame_bottom.pack(fill='x')
-
-        self.import_button = tk.Button(self.frame_bottom, text="Import csv file", command=self.import_points, height=2)
-        self.import_button.pack(side='left', fill='x', expand=True)
-
-        self.export_button = tk.Button(self.frame_bottom, text="Export csv file", command=self.export_points, height=2)
-        self.export_button.pack(side='left', fill='x', expand=True)
-
-        self.delete_button = tk.Button(self.frame_bottom, text="Apply changes", command=self.delete_points, height=2)
-        self.delete_button.pack(side='left', fill='x', expand=True)
-
-    def button_pressed(self):
+    def button_pressed(self, event):
         if self.button_state == False:
-            self.tool.config(relief="sunken")
+            self.edit_button.config(relief="sunken")
             self.button_state = True
         else:
-            self.tool.config(relief="raised")
+            self.edit_button.config(relief="raised")
             self.button_state = False
             self.canvas.draw()
+
+    def on_enter(self, event, btn):
+        if btn == 'edit':
+            self.edit_button.tooltip = ttk.Label(self.root, text="Selecting an area (Key - I)")
+            self.edit_button.tooltip.place(x=self.root.winfo_pointerx(), y=self.root.winfo_pointery())
+            self.edit_button.tooltip.lift()
+        elif btn == 'open':
+            self.open_button.tooltip = ttk.Label(self.root, text="Open file")
+            self.open_button.tooltip.place(x=self.root.winfo_pointerx(), y=self.root.winfo_pointery())
+            self.open_button.tooltip.lift()
+        elif btn == 'save':
+            self.save_button.tooltip = ttk.Label(self.root, text="Save file")
+            self.save_button.tooltip.place(x=self.root.winfo_pointerx(), y=self.root.winfo_pointery())
+            self.save_button.tooltip.lift()
+        elif btn == 'delete':
+            self.delete_button.tooltip = ttk.Label(self.root, text="Prepare points for deletion(Key - Del) \n Apply changes (Key - Enter)")
+            self.delete_button.tooltip.place(x=self.root.winfo_pointerx(), y=self.root.winfo_pointery())
+            self.delete_button.tooltip.lift()
+
+    def on_leave(self, event, btn):
+        if btn == 'edit':
+            self.edit_button.tooltip.destroy()
+        elif btn == 'open':
+            self.open_button.tooltip.destroy()
+        elif btn == 'save':
+            self.save_button.tooltip.destroy()
+        elif btn == 'delete':
+            self.delete_button.tooltip.destroy()
+
+    def on_closing(self, event):
+        if messagebox.askokcancel("Close", "Are you sure you want to close the application?"):
+            self.root.destroy()
 
     def on_press(self, event):
         if self.button_state == True:
@@ -76,23 +124,15 @@ class PointPlotterApp:
             self.ax.add_patch(self.rect)
             self.canvas.draw()
 
+            # ellipse = plt.Circle((0, 0), radius=ellipse_width / 2, fill=False, edgecolor='blue')
+
+
             if len(self.points) > 0:
                 self.selection_points()
 
             self.rect.remove()
 
-    def on_click(self, event):
-        if len(self.del_points) == 0:
-            return
-
-        for del_point in self.del_points:
-            if abs(event.xdata - del_point[0]) < 0.1 and abs(event.ydata - del_point[1]) < 0.1:
-                self.ax.plot(del_point[0], del_point[1], 'ro')
-                self.del_points.remove(del_point)
-                self.canvas.draw()
-                return
-
-    def import_points(self):
+    def open_points(self):
         file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
         if file_path:
             self.points.clear()
@@ -126,14 +166,14 @@ class PointPlotterApp:
                     self.points.append((x, y1, y2, y3, y4, y5))
             self.plot_points()
 
-    def export_points(self):
+    def save_points(self):
         file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
         if file_path:
             with open(file_path,'w',encoding='utf-8',newline='') as file:
-                writer = csv.DictWriter(file, fieldnames=['x','y'], delimiter=';', quoting=csv.QUOTE_MINIMAL)
+                writer = csv.DictWriter(file, fieldnames=['Time','Frequency (Hz)1','Frequency (Hz)2','Frequency (Hz)3','Frequency (Hz)4','Frequency (Hz)5'], delimiter=';', quoting=csv.QUOTE_MINIMAL)
                 writer.writeheader()
                 for point in self.points:
-                    writer.writerow({'x': point[0], 'y': point[1]})
+                    writer.writerow({'Time': point[0], 'Frequency (Hz)1': point[1], 'Frequency (Hz)2': point[2], 'Frequency (Hz)3': point[3], 'Frequency (Hz)4': point[4], 'Frequency (Hz)5': point[5]})
 
     def delete_points(self):
         if len(self.del_points) == 0:
