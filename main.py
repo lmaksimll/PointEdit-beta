@@ -3,7 +3,7 @@ from tkinter import (filedialog, messagebox, ttk)
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import (
     FigureCanvasTkAgg, NavigationToolbar2Tk)
-from matplotlib.patches import Rectangle, Ellipse
+from matplotlib.patches import Ellipse
 import csv
 
 class PointPlotterApp:
@@ -17,7 +17,7 @@ class PointPlotterApp:
         self.frame_top.pack(fill='both', expand=True)
         self.figure, self.ax = plt.subplots(dpi=100)
 
-        self.rect = Rectangle((0, 0), 1, 1, facecolor='None', edgecolor='black')
+        self.ellipse = Ellipse((0,0), 1, 1, fill=False, edgecolor='black')
 
         self.canvas = FigureCanvasTkAgg(self.figure, master=self.frame_top)
         self.canvas.draw()
@@ -26,10 +26,13 @@ class PointPlotterApp:
         # -------------------variables-------------------
         self.points = []
         self.del_points = []
-        self.rec_x0 = None
-        self.rec_y0 = None
-        self.rec_x1 = None
-        self.rec_y1 = None
+
+        self.ellipse_coord_0 = [None,None]
+        self.ellipse_coord_1 = [None,None]
+        self.ellipse_width = None
+        self.ellipse_height = None
+        self.ellipse_center = [None,None]
+
         self.button_state = False
 
         # -------------------buttons-------------------
@@ -111,26 +114,31 @@ class PointPlotterApp:
 
     def on_press(self, event):
         if self.button_state == True:
-            self.rec_x0 = event.xdata
-            self.rec_y0 = event.ydata
+            self.ellipse_coord_0[0] = (event.xdata)
+            self.ellipse_coord_0[1] = (event.ydata)
 
     def on_release(self, event):
         if self.button_state == True:
-            self.rec_x1 = event.xdata
-            self.rec_y1 = event.ydata
-            self.rect.set_width(self.rec_x1 - self.rec_x0)
-            self.rect.set_height(self.rec_y1 - self.rec_y0)
-            self.rect.set_xy((self.rec_x0, self.rec_y0))
-            self.ax.add_patch(self.rect)
+            self.ellipse_coord_1[0] = (event.xdata)
+            self.ellipse_coord_1[1] = (event.ydata)
+
+            self.ellipse_height = abs(self.ellipse_coord_1[1] - self.ellipse_coord_0[1])
+            self.ellipse.set_height(self.ellipse_height)
+
+            self.ellipse_width = abs(self.ellipse_coord_1[0] - self.ellipse_coord_0[0])
+            self.ellipse.set_width(self.ellipse_width)
+
+            self.ellipse_center[0] = ((self.ellipse_coord_0[0] + self.ellipse_coord_1[0]) / 2)
+            self.ellipse_center[1] = ((self.ellipse_coord_0[1] + self.ellipse_coord_1[1]) / 2)
+            self.ellipse.set_center(self.ellipse_center)
+
+            self.ax.add_patch(self.ellipse)
             self.canvas.draw()
-
-            # ellipse = plt.Circle((0, 0), radius=ellipse_width / 2, fill=False, edgecolor='blue')
-
 
             if len(self.points) > 0:
                 self.selection_points()
 
-            self.rect.remove()
+            self.ellipse.remove()
 
     def open_points(self):
         file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
@@ -163,7 +171,7 @@ class PointPlotterApp:
                             y1, y2, y3, y4, y5 = '','','','',''
                     else:
                         return
-                    self.points.append((x, y1, y2, y3, y4, y5))
+                    self.points.append([x, y1, y2, y3, y4, y5])
             self.plot_points()
 
     def save_points(self):
@@ -181,8 +189,10 @@ class PointPlotterApp:
 
         for del_point in self.del_points:
             for point in self.points:
-                if point[0] == del_point[0] and point[1] == del_point[1]:
-                    self.points.remove(point)
+                if point[0] == del_point[0] and point[int(del_point[2])] == del_point[1]:
+                    point[int(del_point[2])] = ''
+                    if point[1] and point[2] and point[3] and point[4] and point[5] == '':
+                        self.points.remove(point)
 
         self.del_points.clear()
         self.plot_points()
@@ -206,16 +216,36 @@ class PointPlotterApp:
 
     def selection_points(self):
         for point in self.points:
-            if self.rec_x1 > self.rec_x0:
-                if point[0] >= self.rec_x0 and point[0] <= self.rec_x1 and point[1] <= self.rec_y0 and point[1] >= self.rec_y1:
+            if point[1] != '':
+                if ((point[0] - self.ellipse_center[0]) ** 2) / ((self.ellipse_width / 2)) ** 2 + ((point [1] - self.ellipse_center[1]) ** 2) / ((self.ellipse_height / 2) ** 2) <= 1:
                     self.ax.plot(point[0], point[1], 'kx')
-                    self.del_points.append(point)
+                    self.del_points.append([point[0], point[1], 1])
                     self.canvas.draw()
-            else:
-                if point[0] <= self.rec_x0 and point[0] >= self.rec_x1 and point[1] >= self.rec_y0 and point[1] <= self.rec_y1:
-                    self.ax.plot(point[0], point[1], 'kx')
-                    self.del_points.append(point)
+
+            if point[2] != '':
+                if ((point[0] - self.ellipse_center[0]) ** 2) / ((self.ellipse_width / 2)) ** 2 + ((point [2] - self.ellipse_center[1]) ** 2) / ((self.ellipse_height / 2) ** 2) <= 1:
+                    self.ax.plot(point[0], point[2], 'kx')
+                    self.del_points.append([point[0], point[2], 2])
                     self.canvas.draw()
+
+            if point[3] != '':
+                if ((point[0] - self.ellipse_center[0]) ** 2) / ((self.ellipse_width / 2)) ** 2 + ((point [3] - self.ellipse_center[1]) ** 2) / ((self.ellipse_height / 2) ** 2) <= 1:
+                    self.ax.plot(point[0], point[3], 'kx')
+                    self.del_points.append([point[0], point[3], 3])
+                    self.canvas.draw()
+
+            if point[4] != '':
+                if ((point[0] - self.ellipse_center[0]) ** 2) / ((self.ellipse_width / 2)) ** 2 + ((point [4] - self.ellipse_center[1]) ** 2) / ((self.ellipse_height / 2) ** 2) <= 1:
+                    self.ax.plot(point[0], point[4], 'kx')
+                    self.del_points.append([point[0], point[4], 4])
+                    self.canvas.draw()
+
+            if point[5] != '':
+                if ((point[0] - self.ellipse_center[0]) ** 2) / ((self.ellipse_width / 2)) ** 2 + ((point [5] - self.ellipse_center[1]) ** 2) / ((self.ellipse_height / 2) ** 2) <= 1:
+                    self.ax.plot(point[0], point[5], 'kx')
+                    self.del_points.append([point[0], point[5], 5])
+                    self.canvas.draw()
+
 
 root = tk.Tk()
 app = PointPlotterApp(root)
