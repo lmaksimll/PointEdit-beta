@@ -1,10 +1,10 @@
 import tkinter as tk
 from tkinter import (filedialog, messagebox, ttk)
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import (
-    FigureCanvasTkAgg, NavigationToolbar2Tk)
+from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg, NavigationToolbar2Tk)
 from matplotlib.patches import Ellipse
 import csv
+import time
 
 class PointPlotterApp:
     def __init__(self, root):
@@ -53,16 +53,12 @@ class PointPlotterApp:
 
         # -------------------bind-------------------
         self.root.bind('<Escape>', self.on_closing)
-        self.root.bind('<i>', self.button_pressed)
+        self.root.bind('<i>', self.button_pressed_event)
+        self.root.bind('<Delete>', self.delete_points_event)
+        self.root.bind('<\>', self.return_points)
 
         self.edit_button.bind("<Enter>", lambda event: self.on_enter(event, 'edit'))
         self.edit_button.bind("<Leave>", lambda event: self.on_leave(event, 'edit'))
-
-        self.open_button.bind("<Enter>", lambda event: self.on_enter(event, 'open'))
-        self.open_button.bind("<Leave>", lambda event: self.on_leave(event, 'open'))
-
-        self.save_button.bind("<Enter>", lambda event: self.on_enter(event, 'save'))
-        self.save_button.bind("<Leave>", lambda event: self.on_leave(event, 'save'))
 
         self.delete_button.bind("<Enter>", lambda event: self.on_enter(event, 'delete'))
         self.delete_button.bind("<Leave>", lambda event: self.on_leave(event, 'delete'))
@@ -71,7 +67,10 @@ class PointPlotterApp:
         self.canvas.mpl_connect('button_press_event', self.on_press)
         self.canvas.mpl_connect('button_release_event', self.on_release)
 
-    def button_pressed(self, event):
+    def button_pressed_event(self, event):
+        self.button_pressed()
+
+    def button_pressed(self):
         if self.button_state == False:
             self.edit_button.config(relief="sunken")
             self.button_state = True
@@ -85,26 +84,14 @@ class PointPlotterApp:
             self.edit_button.tooltip = ttk.Label(self.root, text="Selecting an area (Key - I)")
             self.edit_button.tooltip.place(x=self.root.winfo_pointerx(), y=self.root.winfo_pointery())
             self.edit_button.tooltip.lift()
-        elif btn == 'open':
-            self.open_button.tooltip = ttk.Label(self.root, text="Open file")
-            self.open_button.tooltip.place(x=self.root.winfo_pointerx(), y=self.root.winfo_pointery())
-            self.open_button.tooltip.lift()
-        elif btn == 'save':
-            self.save_button.tooltip = ttk.Label(self.root, text="Save file")
-            self.save_button.tooltip.place(x=self.root.winfo_pointerx(), y=self.root.winfo_pointery())
-            self.save_button.tooltip.lift()
         elif btn == 'delete':
-            self.delete_button.tooltip = ttk.Label(self.root, text="Prepare points for deletion(Key - Del) \n Apply changes (Key - Enter)")
+            self.delete_button.tooltip = ttk.Label(self.root, text="Apply changes (Key - Delete)")
             self.delete_button.tooltip.place(x=self.root.winfo_pointerx(), y=self.root.winfo_pointery())
             self.delete_button.tooltip.lift()
 
     def on_leave(self, event, btn):
         if btn == 'edit':
             self.edit_button.tooltip.destroy()
-        elif btn == 'open':
-            self.open_button.tooltip.destroy()
-        elif btn == 'save':
-            self.save_button.tooltip.destroy()
         elif btn == 'delete':
             self.delete_button.tooltip.destroy()
 
@@ -183,6 +170,9 @@ class PointPlotterApp:
                 for point in self.points:
                     writer.writerow({'Time': point[0], 'Frequency (Hz)1': point[1], 'Frequency (Hz)2': point[2], 'Frequency (Hz)3': point[3], 'Frequency (Hz)4': point[4], 'Frequency (Hz)5': point[5]})
 
+    def delete_points_event(self, event):
+        self.delete_points()
+
     def delete_points(self):
         if len(self.del_points) == 0:
             return
@@ -197,24 +187,44 @@ class PointPlotterApp:
         self.del_points.clear()
         self.plot_points()
 
+    def return_points(self,event):
+        if len(self.del_points) == 0:
+            return
+
+        point = self.del_points[-1]
+        if point[2] == 1:
+            self.ax.plot(point[0], point[1], 'ro')
+        elif point[2] == 2:
+            self.ax.plot(point[0], point[1], 'go')
+        elif point[2] == 3:
+            self.ax.plot(point[0], point[1], 'bo')
+        elif point[2] == 4:
+            self.ax.plot(point[0], point[1], 'yo')
+        elif point[2] == 5:
+            self.ax.plot(point[0], point[1], 'mo')
+
+        self.canvas.draw()
+        self.del_points.pop()
+
     def plot_points(self):
         self.ax.clear()
 
         for point in self.points:
             if point[0] != '' and point[1] != '' :
                 self.ax.plot(point[0], point[1], 'r.')
-                if point [2] != '':
-                    self.ax.plot(point[0], point[2], 'g.')
-                    if point[3] != '':
-                        self.ax.plot(point[0], point[3], 'b.')
-                        if point[4] != '':
-                            self.ax.plot(point[0], point[4], 'y.')
-                            if point[5] != '':
-                                self.ax.plot(point[0], point[5], 'm.')
+            if point[0] != '' and point [2] != '':
+                self.ax.plot(point[0], point[2], 'g.')
+            if point[0] != '' and point[3] != '':
+                self.ax.plot(point[0], point[3], 'b.')
+            if point[0] != '' and point[4] != '':
+                self.ax.plot(point[0], point[4], 'y.')
+            if point[0] != '' and point[5] != '':
+                self.ax.plot(point[0], point[5], 'm.')
 
         self.canvas.draw()
 
     def selection_points(self):
+        start_time = time.time()
         for point in self.points:
             if point[1] != '':
                 if ((point[0] - self.ellipse_center[0]) ** 2) / ((self.ellipse_width / 2)) ** 2 + ((point [1] - self.ellipse_center[1]) ** 2) / ((self.ellipse_height / 2) ** 2) <= 1:
@@ -246,6 +256,8 @@ class PointPlotterApp:
                     self.del_points.append([point[0], point[5], 5])
                     self.canvas.draw()
 
+        end_time = time.time()
+        print("Время выполнения функции: ", end_time - start_time, "секунд")
 
 root = tk.Tk()
 app = PointPlotterApp(root)
