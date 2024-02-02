@@ -5,6 +5,7 @@ from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg, NavigationTool
 from matplotlib.patches import Ellipse
 import csv
 import time
+import concurrent.futures
 
 class PointPlotterApp:
     def __init__(self, root):
@@ -123,7 +124,7 @@ class PointPlotterApp:
             self.canvas.draw()
 
             if len(self.points) > 0:
-                self.selection_points()
+                self.selection_points_thread()
 
             self.ellipse.remove()
 
@@ -223,41 +224,42 @@ class PointPlotterApp:
 
         self.canvas.draw()
 
-    def selection_points(self):
+    def selection_points_thread(self):
         start_time = time.time()
-        for point in self.points:
-            if point[1] != '':
-                if ((point[0] - self.ellipse_center[0]) ** 2) / ((self.ellipse_width / 2)) ** 2 + ((point [1] - self.ellipse_center[1]) ** 2) / ((self.ellipse_height / 2) ** 2) <= 1:
-                    self.ax.plot(point[0], point[1], 'kx')
-                    self.del_points.append([point[0], point[1], 1])
-                    self.canvas.draw()
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            futures = [executor.submit(self.process_point, point, self.ellipse_center, self.ellipse_width, self.ellipse_height) for point in self.points]
+            concurrent.futures.wait(futures)
 
-            if point[2] != '':
-                if ((point[0] - self.ellipse_center[0]) ** 2) / ((self.ellipse_width / 2)) ** 2 + ((point [2] - self.ellipse_center[1]) ** 2) / ((self.ellipse_height / 2) ** 2) <= 1:
-                    self.ax.plot(point[0], point[2], 'kx')
-                    self.del_points.append([point[0], point[2], 2])
-                    self.canvas.draw()
+            for future in futures:
+                result = future.result()
+                if result is not None:
+                    for del_point in result:
+                        self.del_points.append(del_point)
 
-            if point[3] != '':
-                if ((point[0] - self.ellipse_center[0]) ** 2) / ((self.ellipse_width / 2)) ** 2 + ((point [3] - self.ellipse_center[1]) ** 2) / ((self.ellipse_height / 2) ** 2) <= 1:
-                    self.ax.plot(point[0], point[3], 'kx')
-                    self.del_points.append([point[0], point[3], 3])
-                    self.canvas.draw()
-
-            if point[4] != '':
-                if ((point[0] - self.ellipse_center[0]) ** 2) / ((self.ellipse_width / 2)) ** 2 + ((point [4] - self.ellipse_center[1]) ** 2) / ((self.ellipse_height / 2) ** 2) <= 1:
-                    self.ax.plot(point[0], point[4], 'kx')
-                    self.del_points.append([point[0], point[4], 4])
-                    self.canvas.draw()
-
-            if point[5] != '':
-                if ((point[0] - self.ellipse_center[0]) ** 2) / ((self.ellipse_width / 2)) ** 2 + ((point [5] - self.ellipse_center[1]) ** 2) / ((self.ellipse_height / 2) ** 2) <= 1:
-                    self.ax.plot(point[0], point[5], 'kx')
-                    self.del_points.append([point[0], point[5], 5])
-                    self.canvas.draw()
+        self.cross_out_points()
 
         end_time = time.time()
-        print("Время выполнения функции: ", end_time - start_time, "секунд")
+        print("Время выполнения функции", end_time - start_time, "секунд")
+
+    @staticmethod
+    def process_point(point, ellipse_center, ellipse_width, ellipse_height):
+        flag_point = False
+        del_points = []
+        for i in range(1, 6):
+            if point[i] != '':
+                if ((point[0] - ellipse_center[0]) ** 2) / ((ellipse_width / 2)) ** 2 + ((point[i] - ellipse_center[1]) ** 2) / ((ellipse_height / 2) ** 2) <= 1:
+                    flag_point = True
+                    del_points.append([point[0], point[i], i])
+
+        if flag_point == True:
+            return del_points
+        else:
+            return
+
+    def cross_out_points(self):
+        for del_point in self.del_points:
+            self.ax.plot(del_point[0], del_point[1], 'kx')
+        self.canvas.draw()
 
 root = tk.Tk()
 app = PointPlotterApp(root)
