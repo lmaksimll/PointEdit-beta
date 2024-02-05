@@ -34,13 +34,15 @@ class PointPlotterApp:
         self.ellipse_height = None
         self.ellipse_center = [None,None]
 
-        self.button_state = False
+        self.button_select_flag = False
+        self.button_zoom_flag = False
+        self.button_pan_flag = False
 
         # -------------------buttons-------------------
         self.toolbar = NavigationToolbar2Tk(self.canvas, self.frame_top)
         self.toolbar.update()
 
-        self.edit_button = tk.Button(self.toolbar, text="Edit point",command=self.button_pressed)
+        self.edit_button = tk.Button(self.toolbar, text="Edit point",command=self.button_select_pressed)
         self.edit_button.pack(side='left', padx=5)
 
         self.open_button = tk.Button(self.toolbar, text="Open file", command=self.open_points)
@@ -54,9 +56,11 @@ class PointPlotterApp:
 
         # -------------------bind-------------------
         self.root.bind('<Escape>', self.on_closing)
-        self.root.bind('<i>', self.button_pressed_event)
         self.root.bind('<Delete>', self.delete_points_event)
         self.root.bind('<\>', self.return_points)
+        self.root.bind('<i>', self.button_select_pressed_event)
+        self.root.bind('<o>', self.button_zoom_pressed_event)
+        self.root.bind('<p>', self.button_pan_pressed_event)
 
         self.edit_button.bind("<Enter>", lambda event: self.on_enter(event, 'edit'))
         self.edit_button.bind("<Leave>", lambda event: self.on_leave(event, 'edit'))
@@ -68,17 +72,56 @@ class PointPlotterApp:
         self.canvas.mpl_connect('button_press_event', self.on_press)
         self.canvas.mpl_connect('button_release_event', self.on_release)
 
-    def button_pressed_event(self, event):
-        self.button_pressed()
+    def button_select_pressed_event(self, event):
+        self.button_select_pressed()
 
-    def button_pressed(self):
-        if self.button_state == False:
-            self.edit_button.config(relief="sunken")
-            self.button_state = True
-        else:
+    def button_zoom_pressed_event(self, event):
+        if self.button_select_flag == True:
+            self.button_select_flag = False
             self.edit_button.config(relief="raised")
-            self.button_state = False
-            self.canvas.draw()
+
+        if self.button_pan_flag == True:
+            self.button_pan_flag = False
+
+        if self.button_zoom_flag == False:
+            self.button_zoom_flag = True
+        elif self.button_zoom_flag == True:
+            self.button_zoom_flag = False
+
+        self.canvas.draw()
+
+    def button_pan_pressed_event(self, event):
+        if self.button_select_flag == True:
+            self.button_select_flag = False
+            self.edit_button.config(relief="raised")
+
+        if self.button_zoom_flag == True:
+            self.button_zoom_flag = False
+
+        if self.button_pan_flag == False:
+            self.button_pan_flag = True
+        elif self.button_pan_flag == True:
+            self.button_pan_flag = False
+
+        self.canvas.draw()
+
+    def button_select_pressed(self):
+        if self.button_zoom_flag == True:
+            self.button_zoom_flag = False
+            self.toolbar.zoom()
+
+        if self.button_pan_flag == True:
+            self.button_pan_flag = False
+            self.toolbar.pan()
+
+        if self.button_select_flag == False:
+            self.button_select_flag = True
+            self.edit_button.config(relief="sunken")
+        else:
+            self.button_select_flag = False
+            self.edit_button.config(relief="raised")
+
+        self.canvas.draw()
 
     def on_enter(self, event, btn):
         if btn == 'edit':
@@ -101,12 +144,12 @@ class PointPlotterApp:
             self.root.destroy()
 
     def on_press(self, event):
-        if self.button_state == True:
+        if self.button_select_flag == True:
             self.ellipse_coord_0[0] = (event.xdata)
             self.ellipse_coord_0[1] = (event.ydata)
 
     def on_release(self, event):
-        if self.button_state == True:
+        if self.button_select_flag == True:
             self.ellipse_coord_1[0] = (event.xdata)
             self.ellipse_coord_1[1] = (event.ydata)
 
