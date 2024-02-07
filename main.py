@@ -2,9 +2,8 @@ import tkinter as tk
 from tkinter import (filedialog, messagebox, ttk)
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg, NavigationToolbar2Tk)
-from matplotlib.patches import Ellipse
+from matplotlib.patches import Rectangle
 import csv
-import time
 import concurrent.futures
 
 class PointPlotterApp:
@@ -18,7 +17,7 @@ class PointPlotterApp:
         self.frame_top.pack(fill='both', expand=True)
         self.figure, self.ax = plt.subplots(dpi=100)
 
-        self.ellipse = Ellipse((0,0), 1, 1, fill=False, edgecolor='black')
+        self.rect = Rectangle((0, 0), 1, 1, facecolor='None', edgecolor='black')
 
         self.canvas = FigureCanvasTkAgg(self.figure, master=self.frame_top)
         self.canvas.draw()
@@ -28,11 +27,8 @@ class PointPlotterApp:
         self.points = []
         self.del_points = []
 
-        self.ellipse_coord_0 = [None,None]
-        self.ellipse_coord_1 = [None,None]
-        self.ellipse_width = None
-        self.ellipse_height = None
-        self.ellipse_center = [None,None]
+        self.rec_x = [None, None]
+        self.rec_y = [None, None]
 
         self.button_select_flag = False
         self.button_zoom_flag = False
@@ -71,6 +67,34 @@ class PointPlotterApp:
         # -------------------connect-------------------
         self.canvas.mpl_connect('button_press_event', self.on_press)
         self.canvas.mpl_connect('button_release_event', self.on_release)
+        # self.toolbar._button_press_id = self.toolbar.canvas.mpl_connect('button_press_event', lambda event: self.on_toolbar_button_press(event))
+
+    # def on_toolbar_button_press(self, event, *args, **kwargs):
+    #     if event.inaxes is not None:
+    #         if hasattr(event.inaxes, '_button_pressed'):
+    #             toolbar_button = event.inaxes._button_pressed
+    #             if toolbar_button is None:
+    #                 return
+    #             if toolbar_button == 'HELP':
+    #                 print('Help button pressed on the toolbar')
+    #             elif toolbar_button == 'BACK':
+    #                 print('Back button pressed on the toolbar')
+    #             elif toolbar_button == 'FORWARD':
+    #                 print('Forward button pressed on the toolbar')
+    #             elif toolbar_button == 'PAN':
+    #                 print('Pan button pressed on the toolbar')
+    #             elif toolbar_button == 'ZOOM':
+    #                 print('Zoom button pressed on the toolbar')
+    #             elif toolbar_button == 'HOME':
+    #                 print('Home button pressed on the toolbar')
+    #             elif toolbar_button == 'SAVE':
+    #                 print('Save button pressed on the toolbar')
+    #             elif toolbar_button == 'MOVE':
+    #                 print('Move button pressed on the toolbar')
+    #             elif toolbar_button == 'RECTANGLE':
+    #                 print('Rectangle button pressed on the toolbar')
+    #             elif toolbar_button == 'SELECT':
+    #                 print('Select button pressed on the toolbar')
 
     def button_select_pressed_event(self, event):
         self.button_select_pressed()
@@ -145,31 +169,25 @@ class PointPlotterApp:
 
     def on_press(self, event):
         if self.button_select_flag == True:
-            self.ellipse_coord_0[0] = (event.xdata)
-            self.ellipse_coord_0[1] = (event.ydata)
+            self.rec_x[0] = event.xdata
+            self.rec_y[0] = event.ydata
 
     def on_release(self, event):
         if self.button_select_flag == True:
-            self.ellipse_coord_1[0] = (event.xdata)
-            self.ellipse_coord_1[1] = (event.ydata)
+            self.rec_x[1] = event.xdata
+            self.rec_y[1] = event.ydata
 
-            self.ellipse_height = abs(self.ellipse_coord_1[1] - self.ellipse_coord_0[1])
-            self.ellipse.set_height(self.ellipse_height)
+            self.rect.set_width(self.rec_x[1] - self.rec_x[0])
+            self.rect.set_height(self.rec_y[1] - self.rec_y[0])
+            self.rect.set_xy((self.rec_x[0], self.rec_y[0]))
 
-            self.ellipse_width = abs(self.ellipse_coord_1[0] - self.ellipse_coord_0[0])
-            self.ellipse.set_width(self.ellipse_width)
-
-            self.ellipse_center[0] = ((self.ellipse_coord_0[0] + self.ellipse_coord_1[0]) / 2)
-            self.ellipse_center[1] = ((self.ellipse_coord_0[1] + self.ellipse_coord_1[1]) / 2)
-            self.ellipse.set_center(self.ellipse_center)
-
-            self.ax.add_patch(self.ellipse)
+            self.ax.add_patch(self.rect)
             self.canvas.draw()
 
             if len(self.points) > 0:
                 self.selection_points_thread()
 
-            self.ellipse.remove()
+            self.rect.remove()
 
     def open_points(self):
         file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
@@ -268,9 +286,8 @@ class PointPlotterApp:
         self.canvas.draw()
 
     def selection_points_thread(self):
-        start_time = time.time()
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            futures = [executor.submit(self.process_point, point, self.ellipse_center, self.ellipse_width, self.ellipse_height) for point in self.points]
+            futures = [executor.submit(self.process_point, point, self.rec_x, self.rec_y) for point in self.points]
             concurrent.futures.wait(futures)
 
             for future in futures:
@@ -281,18 +298,26 @@ class PointPlotterApp:
 
         self.cross_out_points()
 
-        end_time = time.time()
-        print("Время выполнения функции", end_time - start_time, "секунд")
-
     @staticmethod
-    def process_point(point, ellipse_center, ellipse_width, ellipse_height):
+    def process_point(point, rec_x, rec_y):
         flag_point = False
         del_points = []
-        for i in range(1, 6):
-            if point[i] != '':
-                if ((point[0] - ellipse_center[0]) ** 2) / ((ellipse_width / 2)) ** 2 + ((point[i] - ellipse_center[1]) ** 2) / ((ellipse_height / 2) ** 2) <= 1:
-                    flag_point = True
-                    del_points.append([point[0], point[i], i])
+
+        if rec_x[0] <= point[0] <= rec_x[1] or rec_x[1] <= point[0] <= rec_x[0]:
+            for i in range(1, 6):
+                if point[i] != '':
+                    if rec_x[1] >= point[0] >= rec_x[0] and rec_y[1] <= point[i] <= rec_y[0]:
+                        flag_point = True
+                        del_points.append([point[0], point[i], i])
+                    elif rec_x[1] <= point[0] <= rec_x[0] and rec_y[1] <= point[i] <= rec_y[0]:
+                        flag_point = True
+                        del_points.append([point[0], point[i], i])
+                    elif rec_x[1] <= point[0] <= rec_x[0] and rec_y[1] >= point[i] >= rec_y[0]:
+                        flag_point = True
+                        del_points.append([point[0], point[i], i])
+                    elif rec_x[1] >= point[0] >= rec_x[0] and rec_y[1] >= point[i] >= rec_y[0]:
+                        flag_point = True
+                        del_points.append([point[0], point[i], i])
 
         if flag_point == True:
             return del_points
