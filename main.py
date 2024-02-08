@@ -6,6 +6,18 @@ from matplotlib.patches import Rectangle
 import csv
 import concurrent.futures
 
+class NavigationToolbarExt(NavigationToolbar2Tk):
+    # toolitems = [t for t in NavigationToolbar2Tk.toolitems if t[0] in ('Pan', 'Save')]
+    NavigationToolbar2Tk.toolitems = (
+        ('Home', 'Reset original view', 'home', 'home'),
+        ('Back', 'Back to  previous view', 'back', 'back'),
+        ('Forward', 'Forward to next view', 'forward', 'forward'),
+        (None, None, None, None),
+        ('Pan', 'Pan axes with left mouse, zoom with right', 'move', 'pan'),
+        ('Zoom', 'Zoom to rectangle', 'zoom_to_rect', 'zoom'),
+        (None, None, None, None),
+    )
+
 class PointPlotterApp:
     def __init__(self, root):
         self.root = root
@@ -25,7 +37,9 @@ class PointPlotterApp:
 
         # -------------------variables-------------------
         self.points = []
+        self.tmp_points = []
         self.del_points = []
+        self.extend_del_points = []
 
         self.rec_x = [None, None]
         self.rec_y = [None, None]
@@ -37,11 +51,9 @@ class PointPlotterApp:
         self.button_release_flag = False
 
         # -------------------buttons-------------------
-        self.toolbar = NavigationToolbar2Tk(self.canvas, self.frame_top)
+        # self.toolbar = NavigationToolbar2Tk(self.canvas, self.frame_top)
+        self.toolbar = NavigationToolbarExt(self.canvas, self.frame_top)
         self.toolbar.update()
-
-        self.edit_button = tk.Button(self.toolbar, text="Edit point",command=self.button_select_pressed)
-        self.edit_button.pack(side='left', padx=5)
 
         self.open_button = tk.Button(self.toolbar, text="Open file", command=self.open_points)
         self.open_button.pack(side='left', padx=5)
@@ -49,22 +61,40 @@ class PointPlotterApp:
         self.save_button = tk.Button(self.toolbar, text="Save file", command=self.save_points)
         self.save_button.pack(side='left', padx=5)
 
-        self.delete_button = tk.Button(self.toolbar, text="Apply changes", command=self.delete_points)
+        ttk.Separator(self.toolbar, orient='vertical').pack(side='left', padx=5)
+
+        self.edit_button = tk.Button(self.toolbar, text="Edit points",command=self.button_select_pressed)
+        self.edit_button.pack(side='left', padx=5)
+
+        self.delete_button = tk.Button(self.toolbar, text="Delete points", command=self.delete_points)
         self.delete_button.pack(side='left', padx=5)
+
+        self.return_button = tk.Button(self.toolbar, text="Return points", command=self.return_points)
+        self.return_button.pack(side='left', padx=5)
+
+        ttk.Separator(self.toolbar, orient='vertical').pack(side='left', padx=5)
+
+        self.apply_button = tk.Button(self.toolbar, text="Apply_changes", command=self.apply_changes_warning)
+        self.apply_button.pack(side='left', padx=100)
 
         # -------------------bind-------------------
         self.root.bind('<Escape>', self.on_closing)
         self.root.bind('<Delete>', self.delete_points_event)
-        self.root.bind('<\>', self.return_points)
+        self.root.bind('<Return>', self.apply_changes_event)
+        self.root.bind('<\>', self.return_points_event)
         self.root.bind('<i>', self.button_select_pressed_event)
         self.root.bind('<o>', self.button_zoom_pressed_event)
         self.root.bind('<p>', self.button_pan_pressed_event)
 
+        # -------------------info bind-------------------
         self.edit_button.bind("<Enter>", lambda event: self.on_enter(event, 'edit'))
         self.edit_button.bind("<Leave>", lambda event: self.on_leave(event, 'edit'))
 
         self.delete_button.bind("<Enter>", lambda event: self.on_enter(event, 'delete'))
         self.delete_button.bind("<Leave>", lambda event: self.on_leave(event, 'delete'))
+
+        self.return_button.bind("<Enter>", lambda event: self.on_enter(event, 'return'))
+        self.return_button.bind("<Leave>", lambda event: self.on_leave(event, 'return'))
 
         # -------------------connect-------------------
         self.canvas.mpl_connect('button_press_event', self.on_press)
@@ -115,6 +145,7 @@ class PointPlotterApp:
         elif self.button_zoom_flag == True:
             self.button_zoom_flag = False
 
+        self.deselect_points()
         self.canvas.draw()
 
     def button_pan_pressed_event(self, event):
@@ -130,6 +161,7 @@ class PointPlotterApp:
         elif self.button_pan_flag == True:
             self.button_pan_flag = False
 
+        self.deselect_points()
         self.canvas.draw()
 
     def button_select_pressed(self):
@@ -148,6 +180,7 @@ class PointPlotterApp:
             self.button_select_flag = False
             self.edit_button.config(relief="raised")
 
+        self.deselect_points()
         self.canvas.draw()
 
     def on_enter(self, event, btn):
@@ -156,15 +189,21 @@ class PointPlotterApp:
             self.edit_button.tooltip.place(x=self.root.winfo_pointerx(), y=self.root.winfo_pointery())
             self.edit_button.tooltip.lift()
         elif btn == 'delete':
-            self.delete_button.tooltip = ttk.Label(self.root, text="Apply changes (Key - Delete)")
+            self.delete_button.tooltip = ttk.Label(self.root, text="Delete selected points (Key - Delete)")
             self.delete_button.tooltip.place(x=self.root.winfo_pointerx(), y=self.root.winfo_pointery())
             self.delete_button.tooltip.lift()
+        elif btn == 'return':
+            self.return_button.tooltip = ttk.Label(self.root, text="Return deleted points (Key - \)")
+            self.return_button.tooltip.place(x=self.root.winfo_pointerx(), y=self.root.winfo_pointery())
+            self.return_button.tooltip.lift()
 
     def on_leave(self, event, btn):
         if btn == 'edit':
             self.edit_button.tooltip.destroy()
         elif btn == 'delete':
             self.delete_button.tooltip.destroy()
+        elif btn == 'return':
+            self.return_button.tooltip.destroy()
 
     def on_closing(self, event):
         if messagebox.askokcancel("Close", "Are you sure you want to close the application?"):
@@ -178,12 +217,15 @@ class PointPlotterApp:
 
             self.rect.set_xy((self.rec_x[0], self.rec_y[0]))
 
+            self.deselect_points()
+
     def on_release(self, event):
         if self.button_select_flag == True:
             self.button_release_flag = True
 
             if len(self.points) > 0:
                 self.selection_points_thread()
+
 
             self.rect.remove()
 
@@ -205,7 +247,12 @@ class PointPlotterApp:
     def open_points(self):
         file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
         if file_path:
+
             self.points.clear()
+            self.tmp_points.clear()
+            self.del_points.clear()
+            self.extend_del_points.clear()
+
             with open(file_path, 'r', encoding='utf-8') as file:
                 reader = csv.DictReader(file, delimiter=';', quotechar='"')
                 for row in reader:
@@ -249,10 +296,39 @@ class PointPlotterApp:
         self.delete_points()
 
     def delete_points(self):
+        if len(self.tmp_points) == 0:
+            return
+
+        tmp_del_list = []
+
+        if len(self.del_points) > 0:
+            for del_point in self.extend_del_points:
+                for tmp_point in self.tmp_points:
+                    if tmp_point == del_point:
+                        self.ax.plot(tmp_point[0], tmp_point[1], marker='.', color='#D3D3D3')
+                        self.tmp_points.remove(tmp_point)
+
+        for tmp_point in self.tmp_points:
+            tmp_del_list.append(tmp_point)
+
+        if len(self.tmp_points) > 0:
+            self.del_points.append(tmp_del_list)
+            self.extend_del_points.extend(tmp_del_list)
+            self.tmp_points.clear()
+            self.cross_out_del_points(tmp_del_list)
+
+    def apply_changes_event(self, event):
+        self.apply_changes_warning()
+
+    def apply_changes_warning(self):
+        if messagebox.askokcancel("Apply", "Are you sure you want to apply the changes? You will not be able to revert deleted points."):
+            self.apply_changes()
+
+    def apply_changes(self):
         if len(self.del_points) == 0:
             return
 
-        for del_point in self.del_points:
+        for del_point in self.extend_del_points:
             for point in self.points:
                 if point[0] == del_point[0] and point[int(del_point[2])] == del_point[1]:
                     point[int(del_point[2])] = ''
@@ -260,26 +336,37 @@ class PointPlotterApp:
                         self.points.remove(point)
 
         self.del_points.clear()
+        self.tmp_points.clear()
+        self.extend_del_points.clear()
+
         self.plot_points()
 
-    def return_points(self,event):
+    def return_points_event(self, event):
+        self.return_points()
+
+    def return_points(self):
         if len(self.del_points) == 0:
             return
 
-        point = self.del_points[-1]
-        if point[2] == 1:
-            self.ax.plot(point[0], point[1], 'r.')
-        elif point[2] == 2:
-            self.ax.plot(point[0], point[1], 'g.')
-        elif point[2] == 3:
-            self.ax.plot(point[0], point[1], 'b.')
-        elif point[2] == 4:
-            self.ax.plot(point[0], point[1], 'y.')
-        elif point[2] == 5:
-            self.ax.plot(point[0], point[1], 'm.')
+        restore_points = self.del_points[-1]
+        for res_point in restore_points:
+            if res_point[2] == 1:
+                self.ax.plot(res_point[0], res_point[1], 'r.')
+            elif res_point[2] == 2:
+                self.ax.plot(res_point[0], res_point[1], 'g.')
+            elif res_point[2] == 3:
+                self.ax.plot(res_point[0], res_point[1], 'b.')
+            elif res_point[2] == 4:
+                self.ax.plot(res_point[0], res_point[1], 'y.')
+            elif res_point[2] == 5:
+                self.ax.plot(res_point[0], res_point[1], 'm.')
 
         self.canvas.draw()
+
         self.del_points.pop()
+        self.extend_del_points.clear()
+        for del_point in self.del_points:
+            self.extend_del_points.extend(del_point)
 
     def plot_points(self):
         self.ax.clear()
@@ -298,6 +385,32 @@ class PointPlotterApp:
 
         self.canvas.draw()
 
+    def deselect_points(self):
+        if len(self.tmp_points) == 0:
+            return
+
+        if len(self.del_points) > 0:
+            for del_point in self.extend_del_points:
+                for tmp_point in self.tmp_points:
+                    if tmp_point == del_point:
+                        self.ax.plot(tmp_point[0], tmp_point[1], marker='.', color='#D3D3D3')
+                        self.tmp_points.remove(tmp_point)
+
+        for tmp_point in self.tmp_points:
+            if tmp_point[2] == 1:
+                self.ax.plot(tmp_point[0], tmp_point[1], 'r.')
+            elif tmp_point[2] == 2:
+                self.ax.plot(tmp_point[0], tmp_point[1], 'g.')
+            elif tmp_point[2] == 3:
+                self.ax.plot(tmp_point[0], tmp_point[1], 'b.')
+            elif tmp_point[2] == 4:
+                self.ax.plot(tmp_point[0], tmp_point[1], 'y.')
+            elif tmp_point[2] == 5:
+                self.ax.plot(tmp_point[0], tmp_point[1], 'm.')
+
+        self.canvas.draw()
+        self.tmp_points.clear()
+
     def selection_points_thread(self):
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = [executor.submit(self.process_point, point, self.rec_x, self.rec_y) for point in self.points]
@@ -306,40 +419,45 @@ class PointPlotterApp:
             for future in futures:
                 result = future.result()
                 if result is not None:
-                    for del_point in result:
-                        self.del_points.append(del_point)
+                    for tmp_point in result:
+                        self.tmp_points.append(tmp_point)
 
         self.cross_out_points()
 
     @staticmethod
     def process_point(point, rec_x, rec_y):
         flag_point = False
-        del_points = []
+        tmp_points = []
 
         if rec_x[0] <= point[0] <= rec_x[1] or rec_x[1] <= point[0] <= rec_x[0]:
             for i in range(1, 6):
                 if point[i] != '':
                     if rec_x[1] >= point[0] >= rec_x[0] and rec_y[1] <= point[i] <= rec_y[0]:
                         flag_point = True
-                        del_points.append([point[0], point[i], i])
+                        tmp_points.append([point[0], point[i], i])
                     elif rec_x[1] <= point[0] <= rec_x[0] and rec_y[1] <= point[i] <= rec_y[0]:
                         flag_point = True
-                        del_points.append([point[0], point[i], i])
+                        tmp_points.append([point[0], point[i], i])
                     elif rec_x[1] <= point[0] <= rec_x[0] and rec_y[1] >= point[i] >= rec_y[0]:
                         flag_point = True
-                        del_points.append([point[0], point[i], i])
+                        tmp_points.append([point[0], point[i], i])
                     elif rec_x[1] >= point[0] >= rec_x[0] and rec_y[1] >= point[i] >= rec_y[0]:
                         flag_point = True
-                        del_points.append([point[0], point[i], i])
+                        tmp_points.append([point[0], point[i], i])
 
         if flag_point == True:
-            return del_points
+            return tmp_points
         else:
             return
 
     def cross_out_points(self):
-        for del_point in self.del_points:
-            self.ax.plot(del_point[0], del_point[1], 'k.')
+        for tmp_point in self.tmp_points:
+            self.ax.plot(tmp_point[0], tmp_point[1], 'k.')
+        self.canvas.draw()
+
+    def cross_out_del_points(self, tmp_del_list):
+        for tmp_del in tmp_del_list:
+            self.ax.plot(tmp_del[0], tmp_del[1], marker='.', color='#D3D3D3')
         self.canvas.draw()
 
 root = tk.Tk()
