@@ -17,7 +17,7 @@ class PointPlotterApp:
         self.frame_top.pack(fill='both', expand=True)
         self.figure, self.ax = plt.subplots(dpi=100)
 
-        self.rect = Rectangle((0, 0), 1, 1, facecolor='None', edgecolor='black')
+        self.rect = Rectangle((0, 0), 1, 1, facecolor='None', edgecolor='black', linestyle='--', linewidth=2)
 
         self.canvas = FigureCanvasTkAgg(self.figure, master=self.frame_top)
         self.canvas.draw()
@@ -33,6 +33,8 @@ class PointPlotterApp:
         self.button_select_flag = False
         self.button_zoom_flag = False
         self.button_pan_flag = False
+
+        self.button_release_flag = False
 
         # -------------------buttons-------------------
         self.toolbar = NavigationToolbar2Tk(self.canvas, self.frame_top)
@@ -67,6 +69,7 @@ class PointPlotterApp:
         # -------------------connect-------------------
         self.canvas.mpl_connect('button_press_event', self.on_press)
         self.canvas.mpl_connect('button_release_event', self.on_release)
+        self.canvas.mpl_connect('motion_notify_event', self.on_motion)
         # self.toolbar._button_press_id = self.toolbar.canvas.mpl_connect('button_press_event', lambda event: self.on_toolbar_button_press(event))
 
     # def on_toolbar_button_press(self, event, *args, **kwargs):
@@ -169,25 +172,35 @@ class PointPlotterApp:
 
     def on_press(self, event):
         if self.button_select_flag == True:
+            self.button_release_flag = False
             self.rec_x[0] = event.xdata
             self.rec_y[0] = event.ydata
 
-    def on_release(self, event):
-        if self.button_select_flag == True:
-            self.rec_x[1] = event.xdata
-            self.rec_y[1] = event.ydata
-
-            self.rect.set_width(self.rec_x[1] - self.rec_x[0])
-            self.rect.set_height(self.rec_y[1] - self.rec_y[0])
             self.rect.set_xy((self.rec_x[0], self.rec_y[0]))
 
-            self.ax.add_patch(self.rect)
-            self.canvas.draw()
+    def on_release(self, event):
+        if self.button_select_flag == True:
+            self.button_release_flag = True
 
             if len(self.points) > 0:
                 self.selection_points_thread()
 
             self.rect.remove()
+
+    def on_motion(self, event):
+        if self.button_select_flag == True and self.rec_x[0] != None and self.button_release_flag == False:
+            if len(self.ax.patches) > 0:
+                for patch in self.ax.patches:
+                    patch.remove()
+
+            self.rec_x[1] = event.xdata
+            self.rec_y[1] = event.ydata
+
+            self.rect.set_width(self.rec_x[1] - self.rec_x[0])
+            self.rect.set_height(self.rec_y[1] - self.rec_y[0])
+
+            self.ax.add_patch(self.rect)
+            self.canvas.draw()
 
     def open_points(self):
         file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
@@ -255,15 +268,15 @@ class PointPlotterApp:
 
         point = self.del_points[-1]
         if point[2] == 1:
-            self.ax.plot(point[0], point[1], 'ro')
+            self.ax.plot(point[0], point[1], 'r.')
         elif point[2] == 2:
-            self.ax.plot(point[0], point[1], 'go')
+            self.ax.plot(point[0], point[1], 'g.')
         elif point[2] == 3:
-            self.ax.plot(point[0], point[1], 'bo')
+            self.ax.plot(point[0], point[1], 'b.')
         elif point[2] == 4:
-            self.ax.plot(point[0], point[1], 'yo')
+            self.ax.plot(point[0], point[1], 'y.')
         elif point[2] == 5:
-            self.ax.plot(point[0], point[1], 'mo')
+            self.ax.plot(point[0], point[1], 'm.')
 
         self.canvas.draw()
         self.del_points.pop()
@@ -326,7 +339,7 @@ class PointPlotterApp:
 
     def cross_out_points(self):
         for del_point in self.del_points:
-            self.ax.plot(del_point[0], del_point[1], 'kx')
+            self.ax.plot(del_point[0], del_point[1], 'k.')
         self.canvas.draw()
 
 root = tk.Tk()
