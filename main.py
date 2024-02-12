@@ -69,7 +69,7 @@ class PointPlotterApp:
         self.delete_button = tk.Button(self.toolbar, text="Delete points", command=self.delete_points)
         self.delete_button.pack(side='left', padx=5)
 
-        self.return_button = tk.Button(self.toolbar, text="Return points", command=self.return_points)
+        self.return_button = tk.Button(self.toolbar, text="Return points", command=self.selection_return)
         self.return_button.pack(side='left', padx=5)
 
         ttk.Separator(self.toolbar, orient='vertical').pack(side='left', padx=5)
@@ -342,14 +342,64 @@ class PointPlotterApp:
         self.plot_points()
 
     def return_points_event(self, event):
-        self.return_points()
+        self.selection_return()
 
-    def return_points(self):
+    def selection_return(self):
         if len(self.del_points) == 0:
             return
 
-        restore_points = self.del_points[-1]
-        for res_point in restore_points:
+        tmp_list = self.return_points_in_area_by_Alex()
+
+        if len(tmp_list) == 0:
+            tmp_list = self.return_points()
+
+        self.plot_return_points(tmp_list)
+
+        self.extend_del_points.clear()
+        for del_point in self.del_points:
+            self.extend_del_points.extend(del_point)
+
+        self.deselect_points()
+
+    def return_points(self):
+        tmp_list = self.del_points[-1]
+        self.del_points.pop()
+
+        return tmp_list
+
+    def return_points_in_area_by_Alex(self):
+        tmp_list = []
+        points_to_remove = []
+
+        for index, del_point in enumerate(self.del_points):
+            for d_p in del_point:
+                if self.rec_x[0] <= d_p[0] <= self.rec_x[1] or self.rec_x[1] <= d_p[0] <= self.rec_x[0]:
+                    if self.rec_x[1] >= d_p[0] >= self.rec_x[0] and self.rec_y[1] <= d_p[1] <= self.rec_y[0]:
+                        tmp_list.append(d_p)
+                        points_to_remove.append((index, d_p))
+
+                    elif self.rec_x[1] <= d_p[0] <= self.rec_x[0] and self.rec_y[1] <= d_p[1] <= self.rec_y[0]:
+                        tmp_list.append(d_p)
+                        points_to_remove.append((index, d_p))
+
+                    elif self.rec_x[1] <= d_p[0] <= self.rec_x[0] and self.rec_y[1] >= d_p[1] >= self.rec_y[0]:
+                        tmp_list.append(d_p)
+                        points_to_remove.append((index, d_p))
+
+                    elif self.rec_x[1] >= d_p[0] >= self.rec_x[0] and self.rec_y[1] >= d_p[1] >= self.rec_y[0]:
+                        tmp_list.append(d_p)
+                        points_to_remove.append((index, d_p))
+
+        for index, point in points_to_remove:
+            self.del_points[index].remove(point)
+
+        # Удаление пустых списков
+        self.del_points = [del_point for del_point in self.del_points if del_point]
+
+        return tmp_list
+
+    def plot_return_points(self, tmp_list):
+        for res_point in tmp_list:
             if res_point[2] == 1:
                 self.ax.plot(res_point[0], res_point[1], 'r.')
             elif res_point[2] == 2:
@@ -360,13 +410,7 @@ class PointPlotterApp:
                 self.ax.plot(res_point[0], res_point[1], 'y.')
             elif res_point[2] == 5:
                 self.ax.plot(res_point[0], res_point[1], 'm.')
-
         self.canvas.draw()
-
-        self.del_points.pop()
-        self.extend_del_points.clear()
-        for del_point in self.del_points:
-            self.extend_del_points.extend(del_point)
 
     def plot_points(self):
         self.ax.clear()
@@ -396,19 +440,8 @@ class PointPlotterApp:
                         self.ax.plot(tmp_point[0], tmp_point[1], marker='.', color='#D3D3D3')
                         self.tmp_points.remove(tmp_point)
 
-        for tmp_point in self.tmp_points:
-            if tmp_point[2] == 1:
-                self.ax.plot(tmp_point[0], tmp_point[1], 'r.')
-            elif tmp_point[2] == 2:
-                self.ax.plot(tmp_point[0], tmp_point[1], 'g.')
-            elif tmp_point[2] == 3:
-                self.ax.plot(tmp_point[0], tmp_point[1], 'b.')
-            elif tmp_point[2] == 4:
-                self.ax.plot(tmp_point[0], tmp_point[1], 'y.')
-            elif tmp_point[2] == 5:
-                self.ax.plot(tmp_point[0], tmp_point[1], 'm.')
+        self.plot_return_points(self.tmp_points)
 
-        self.canvas.draw()
         self.tmp_points.clear()
 
     def selection_points_thread(self):
