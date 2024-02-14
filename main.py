@@ -6,17 +6,55 @@ from matplotlib.patches import Rectangle
 import csv
 import concurrent.futures
 
-class NavigationToolbarExt(NavigationToolbar2Tk):
-    # toolitems = [t for t in NavigationToolbar2Tk.toolitems if t[0] in ('Pan', 'Save')]
-    NavigationToolbar2Tk.toolitems = (
-        ('Home', 'Reset original view', 'home', 'home'),
-        ('Back', 'Back to  previous view', 'back', 'back'),
-        ('Forward', 'Forward to next view', 'forward', 'forward'),
-        (None, None, None, None),
-        ('Pan', 'Pan axes with left mouse, zoom with right', 'move', 'pan'),
-        ('Zoom', 'Zoom to rectangle', 'zoom_to_rect', 'zoom'),
-        (None, None, None, None),
-    )
+class CustomToolbar(NavigationToolbar2Tk):
+    def __init__(self, canvas_, parent_, root_):
+        self.toolitems = (
+            ('Home', 'Reset original view', 'home', 'home'),
+            ('Back', 'Back to previous view', 'back', 'back'),
+            ('Forward', 'Forward to next view', 'forward', 'forward'),
+            (None, None, None, None),
+            ('Pan', 'Pan axes with left mouse, zoom with right', 'move', 'pan'),
+            ('Zoom', 'Zoom to rectangle', 'zoom_to_rect', 'zoom'),
+            (None, None, None, None),
+        )
+
+        self.button_select_flag = False
+
+        super().__init__(canvas_, parent_)
+
+        self.custom_button = tk.Button(self, text="Edit points", command=self.custom_action)
+        self.custom_button.pack(side=tk.LEFT)
+
+        self.root = root_
+        self.root.bind('<i>', self.custom_action_event)
+
+    def custom_action_event(self,event):
+        self.custom_action()
+
+    def custom_action(self):
+        if not self.button_select_flag:
+            self.custom_button.config(relief="sunken")
+            if self.mode == 'pan/zoom':
+                self.pan()
+            elif self.mode == 'zoom rect':
+                self.zoom()
+        else:
+            self.custom_button.config(relief="raised")
+
+        self.button_select_flag = not self.button_select_flag
+
+    def pan(self):
+        if self.button_select_flag:
+            self.button_select_flag = False
+            self.custom_button.config(relief="raised")
+        super().pan()
+
+    def zoom(self):
+        if self.button_select_flag:
+            self.button_select_flag = False
+            self.custom_button.config(relief="raised")
+        super().zoom()
+
 
 class PointPlotterApp:
     def __init__(self, root):
@@ -35,6 +73,9 @@ class PointPlotterApp:
         self.canvas.draw()
         self.canvas.get_tk_widget().pack(fill='both', expand=True)
 
+        self.toolbar = CustomToolbar(self.canvas, self.frame_top, root)
+        self.toolbar.update()
+
         # -------------------variables-------------------
         self.points = []
         self.tmp_points = []
@@ -44,16 +85,10 @@ class PointPlotterApp:
         self.rec_x = [None, None]
         self.rec_y = [None, None]
 
-        self.button_select_flag = False
-        self.button_zoom_flag = False
-        self.button_pan_flag = False
-
         self.button_release_flag = False
 
         # -------------------buttons-------------------
-        # self.toolbar = NavigationToolbar2Tk(self.canvas, self.frame_top)
-        self.toolbar = NavigationToolbarExt(self.canvas, self.frame_top)
-        self.toolbar.update()
+        ttk.Separator(self.toolbar, orient='vertical').pack(side='left', padx=5)
 
         self.open_button = tk.Button(self.toolbar, text="Open file", command=self.open_points)
         self.open_button.pack(side='left', padx=5)
@@ -62,9 +97,6 @@ class PointPlotterApp:
         self.save_button.pack(side='left', padx=5)
 
         ttk.Separator(self.toolbar, orient='vertical').pack(side='left', padx=5)
-
-        self.edit_button = tk.Button(self.toolbar, text="Edit points",command=self.button_select_pressed)
-        self.edit_button.pack(side='left', padx=5)
 
         self.delete_button = tk.Button(self.toolbar, text="Delete points", command=self.delete_points)
         self.delete_button.pack(side='left', padx=5)
@@ -82,13 +114,10 @@ class PointPlotterApp:
         self.root.bind('<Delete>', self.delete_points_event)
         self.root.bind('<Return>', self.apply_changes_event)
         self.root.bind('<\>', self.return_points_event)
-        self.root.bind('<i>', self.button_select_pressed_event)
-        self.root.bind('<o>', self.button_zoom_pressed_event)
-        self.root.bind('<p>', self.button_pan_pressed_event)
 
         # -------------------info bind-------------------
-        self.edit_button.bind("<Enter>", lambda event: self.on_enter(event, 'edit'))
-        self.edit_button.bind("<Leave>", lambda event: self.on_leave(event, 'edit'))
+        self.toolbar.custom_button.bind("<Enter>", lambda event: self.on_enter(event, 'edit'))
+        self.toolbar.custom_button.bind("<Leave>", lambda event: self.on_leave(event, 'edit'))
 
         self.delete_button.bind("<Enter>", lambda event: self.on_enter(event, 'delete'))
         self.delete_button.bind("<Leave>", lambda event: self.on_leave(event, 'delete'))
@@ -100,94 +129,13 @@ class PointPlotterApp:
         self.canvas.mpl_connect('button_press_event', self.on_press)
         self.canvas.mpl_connect('button_release_event', self.on_release)
         self.canvas.mpl_connect('motion_notify_event', self.on_motion)
-        # self.toolbar._button_press_id = self.toolbar.canvas.mpl_connect('button_press_event', lambda event: self.on_toolbar_button_press(event))
 
-    # def on_toolbar_button_press(self, event, *args, **kwargs):
-    #     if event.inaxes is not None:
-    #         if hasattr(event.inaxes, '_button_pressed'):
-    #             toolbar_button = event.inaxes._button_pressed
-    #             if toolbar_button is None:
-    #                 return
-    #             if toolbar_button == 'HELP':
-    #                 print('Help button pressed on the toolbar')
-    #             elif toolbar_button == 'BACK':
-    #                 print('Back button pressed on the toolbar')
-    #             elif toolbar_button == 'FORWARD':
-    #                 print('Forward button pressed on the toolbar')
-    #             elif toolbar_button == 'PAN':
-    #                 print('Pan button pressed on the toolbar')
-    #             elif toolbar_button == 'ZOOM':
-    #                 print('Zoom button pressed on the toolbar')
-    #             elif toolbar_button == 'HOME':
-    #                 print('Home button pressed on the toolbar')
-    #             elif toolbar_button == 'SAVE':
-    #                 print('Save button pressed on the toolbar')
-    #             elif toolbar_button == 'MOVE':
-    #                 print('Move button pressed on the toolbar')
-    #             elif toolbar_button == 'RECTANGLE':
-    #                 print('Rectangle button pressed on the toolbar')
-    #             elif toolbar_button == 'SELECT':
-    #                 print('Select button pressed on the toolbar')
-
-    def button_select_pressed_event(self, event):
-        self.button_select_pressed()
-
-    def button_zoom_pressed_event(self, event):
-        if self.button_select_flag == True:
-            self.button_select_flag = False
-            self.edit_button.config(relief="raised")
-
-        if self.button_pan_flag == True:
-            self.button_pan_flag = False
-
-        if self.button_zoom_flag == False:
-            self.button_zoom_flag = True
-        elif self.button_zoom_flag == True:
-            self.button_zoom_flag = False
-
-        self.deselect_points()
-        self.canvas.draw()
-
-    def button_pan_pressed_event(self, event):
-        if self.button_select_flag == True:
-            self.button_select_flag = False
-            self.edit_button.config(relief="raised")
-
-        if self.button_zoom_flag == True:
-            self.button_zoom_flag = False
-
-        if self.button_pan_flag == False:
-            self.button_pan_flag = True
-        elif self.button_pan_flag == True:
-            self.button_pan_flag = False
-
-        self.deselect_points()
-        self.canvas.draw()
-
-    def button_select_pressed(self):
-        if self.button_zoom_flag == True:
-            self.button_zoom_flag = False
-            self.toolbar.zoom()
-
-        if self.button_pan_flag == True:
-            self.button_pan_flag = False
-            self.toolbar.pan()
-
-        if self.button_select_flag == False:
-            self.button_select_flag = True
-            self.edit_button.config(relief="sunken")
-        else:
-            self.button_select_flag = False
-            self.edit_button.config(relief="raised")
-
-        self.deselect_points()
-        self.canvas.draw()
 
     def on_enter(self, event, btn):
         if btn == 'edit':
-            self.edit_button.tooltip = ttk.Label(self.root, text="Selecting an area (Key - I)")
-            self.edit_button.tooltip.place(x=self.root.winfo_pointerx(), y=self.root.winfo_pointery())
-            self.edit_button.tooltip.lift()
+            self.toolbar.custom_button.tooltip = ttk.Label(self.root, text="Selecting an area (Key - I)")
+            self.toolbar.custom_button.tooltip.place(x=self.root.winfo_pointerx(), y=self.root.winfo_pointery())
+            self.toolbar.custom_button.tooltip.lift()
         elif btn == 'delete':
             self.delete_button.tooltip = ttk.Label(self.root, text="Delete selected points (Key - Delete)")
             self.delete_button.tooltip.place(x=self.root.winfo_pointerx(), y=self.root.winfo_pointery())
@@ -199,7 +147,7 @@ class PointPlotterApp:
 
     def on_leave(self, event, btn):
         if btn == 'edit':
-            self.edit_button.tooltip.destroy()
+            self.toolbar.custom_button.tooltip.destroy()
         elif btn == 'delete':
             self.delete_button.tooltip.destroy()
         elif btn == 'return':
@@ -210,27 +158,27 @@ class PointPlotterApp:
             self.root.destroy()
 
     def on_press(self, event):
-        if self.button_select_flag == True:
+        if self.toolbar.button_select_flag:
             self.button_release_flag = False
             self.rec_x[0] = event.xdata
             self.rec_y[0] = event.ydata
 
             self.rect.set_xy((self.rec_x[0], self.rec_y[0]))
 
-            self.deselect_points()
+        self.deselect_points()
+        self.canvas.draw()
 
     def on_release(self, event):
-        if self.button_select_flag == True:
+        if self.toolbar.button_select_flag:
             self.button_release_flag = True
 
             if len(self.points) > 0:
                 self.selection_points_thread()
 
-
             self.rect.remove()
 
     def on_motion(self, event):
-        if self.button_select_flag == True and self.rec_x[0] != None and self.button_release_flag == False:
+        if self.toolbar.button_select_flag == True and self.rec_x[0] != None and self.button_release_flag == False:
             if len(self.ax.patches) > 0:
                 for patch in self.ax.patches:
                     patch.remove()
