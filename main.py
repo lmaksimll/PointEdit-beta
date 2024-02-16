@@ -280,7 +280,7 @@ class PointPlotterApp:
             for point in self.points:
                 if point[0] == del_point[0] and point[int(del_point[2])] == del_point[1]:
                     point[int(del_point[2])] = ''
-                    if point[1] and point[2] and point[3] and point[4] and point[5] == '':
+                    if point[1] == '' and point[2] == '' and point[3] == '' and point[4] == '' and point[5] == '':
                         self.points.remove(point)
 
         self.del_points.clear()
