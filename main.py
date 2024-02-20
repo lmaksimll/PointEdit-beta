@@ -106,7 +106,7 @@ class PointPlotterApp:
 
         ttk.Separator(self.toolbar, orient='vertical').pack(side='left', padx=5)
 
-        self.apply_button = tk.Button(self.toolbar, text="Apply_changes", command=self.apply_changes_warning)
+        self.apply_button = tk.Button(self.toolbar, text="Apply changes", command=self.apply_changes_warning)
         self.apply_button.pack(side='left', padx=100)
 
         # -------------------bind-------------------
@@ -226,19 +226,22 @@ class PointPlotterApp:
                                 y2, y3, y4, y5 = '','','',''
                         else:
                             y1, y2, y3, y4, y5 = '','','','',''
+
+                        t1 = float(row['Temp. sample ( C)'])
+                        t2 = float(row['Temp. (2e reading) ( C)'])
                     else:
                         return
-                    self.points.append([x, y1, y2, y3, y4, y5])
+                    self.points.append([x, y1, y2, y3, y4, y5, t1, t2])
             self.plot_points()
 
     def save_points(self):
         file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
         if file_path:
             with open(file_path,'w',encoding='utf-8',newline='') as file:
-                writer = csv.DictWriter(file, fieldnames=['Time','Frequency (Hz)1','Frequency (Hz)2','Frequency (Hz)3','Frequency (Hz)4','Frequency (Hz)5'], delimiter=';', quoting=csv.QUOTE_MINIMAL)
+                writer = csv.DictWriter(file, fieldnames=['Time','Frequency (Hz)1','Frequency (Hz)2','Frequency (Hz)3','Frequency (Hz)4','Frequency (Hz)5','Temp. sample ( C)','Temp. (2e reading) ( C)'], delimiter=';', quoting=csv.QUOTE_MINIMAL)
                 writer.writeheader()
                 for point in self.points:
-                    writer.writerow({'Time': point[0], 'Frequency (Hz)1': point[1], 'Frequency (Hz)2': point[2], 'Frequency (Hz)3': point[3], 'Frequency (Hz)4': point[4], 'Frequency (Hz)5': point[5]})
+                    writer.writerow({'Time': point[0], 'Frequency (Hz)1': point[1], 'Frequency (Hz)2': point[2], 'Frequency (Hz)3': point[3], 'Frequency (Hz)4': point[4], 'Frequency (Hz)5': point[5], 'Temp. sample ( C)': point[6], 'Temp. (2e reading) ( C)': point[7]})
 
     def delete_points_event(self, event):
         self.delete_points()
