@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg, NavigationToolbar2Tk)
 from matplotlib.patches import Rectangle
 import csv
+from openpyxl import Workbook
+import pandas as pd
 import concurrent.futures
 
 class CustomToolbar(NavigationToolbar2Tk):
@@ -193,48 +195,62 @@ class PointPlotterApp:
             self.canvas.draw()
 
     def open_points(self):
-        file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
-        if file_path:
+        file_path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx")])
 
+        if file_path:
             self.points.clear()
             self.tmp_points.clear()
             self.del_points.clear()
             self.extend_del_points.clear()
 
-            with open(file_path, 'r', encoding='utf-8') as file:
-                reader = csv.DictReader(file, delimiter=';', quotechar='"')
-                for row in reader:
-                    if row['Time'] != '':
-                        x = float(row['Time'])
-                        if row['Frequency (Hz)1'] != '':
-                            y1 = float(row['Frequency (Hz)1'])
-                            if row['Frequency (Hz)2'] != '':
-                                y2 = float(row['Frequency (Hz)2'])
-                                if row['Frequency (Hz)3'] != '':
-                                    y3 = float(row['Frequency (Hz)3'])
-                                    if row['Frequency (Hz)4'] != '':
-                                        y4 = float(row['Frequency (Hz)4'])
-                                        if row['Frequency (Hz)5'] != '':
-                                            y5 = float(row['Frequency (Hz)5'])
-                                        else:
-                                            y5 = ''
-                                    else:
-                                        y4, y5 = '',''
-                                else:
-                                    y3, y4, y5 = '','',''
-                            else:
-                                y2, y3, y4, y5 = '','','',''
-                        else:
-                            y1, y2, y3, y4, y5 = '','','','',''
+            df = pd.read_excel(file_path)
 
-                        t1 = float(row['Temp. sample ( C)'])
-                        t2 = float(row['Temp. (2e reading) ( C)'])
-                    else:
-                        return
-                    self.points.append([x, y1, y2, y3, y4, y5, t1, t2])
+            time_col = [col for col in df.columns if col.startswith("Time")]
+            freq_cols = [col for col in df.columns if col.startswith("Frequency")][:5]
+
+            temp_sample_col = ['Temp. sample ( C)'] if 'Temp. sample ( C)' in df.columns else []
+            if not temp_sample_col:
+                df['Temp. sample ( C)'] = pd.NA
+                temp_sample_col = ['Temp. sample ( C)']
+
+            temp_2nd_reading_col = ['Temp. (2e reading) ( C)'] if 'Temp. (2e reading) ( C)' in df.columns else []
+            if not temp_2nd_reading_col:
+                df['Temp. (2e reading) ( C)'] = pd.NA
+                temp_2nd_reading_col = ['Temp. (2e reading) ( C)']
+
+            cols_to_keep = time_col + freq_cols + temp_sample_col + temp_2nd_reading_col
+            filtered_df = df[cols_to_keep]
+
+            for index, row in filtered_df.iterrows():
+                row_values = []
+
+                for col in filtered_df.columns:
+                    value = row[col]
+
+                    # if pd.isnull(value):
+                    #     value = ""
+
+                    row_values.append(float(value) if pd.notnull(value) else "")
+
+                self.points.append(row_values)
+
             self.plot_points()
 
     def save_points(self):
+        file_path = filedialog.asksaveasfilename(defaultextension=".xlsx", filetypes=[("Excel files", "*.xlsx")])
+        if file_path:
+            workbook = Workbook()
+            sheet = workbook.active
+            headers = ['Time', 'Frequency (Hz)1', 'Frequency (Hz)2', 'Frequency (Hz)3', 'Frequency (Hz)4',
+                       'Frequency (Hz)5', 'Temp. sample ( C)', 'Temp. (2e reading) ( C)']
+            sheet.append(headers)
+
+            for point in self.points:
+                sheet.append([point[0], point[1], point[2], point[3], point[4], point[5], point[6], point[7]])
+
+            workbook.save(file_path)
+
+    def save_points_old(self):
         file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
         if file_path:
             with open(file_path,'w',encoding='utf-8',newline='') as file:
